@@ -6,13 +6,18 @@ Takes output from \code{\link{ConjointChecks}} and produces a matrix showing
 the percentage of reported violations at each cell.
 }
 \usage{
-PrepareChecks(resp,ss.lower=10) 
+PrepareChecks(resp,ss.lower=10, collapse.columns = FALSE) 
 }
 \arguments{
 \item{resp}{Raw dichotomously coded response data. Columns represent
   items and rows represent individuals.}
 \item{ss.lower}{Only sum scores that have at least this many distinct
   individuals with that sum score will be used.}
+\item{collapse.columns}{Sum over columns.}
+}
+\value{
+Returns \code{n} and \code{N}, respectively, containing the number of
+correct responses and the number of total responses for each cell.
 }
 \examples{
 #simulated Rasch example

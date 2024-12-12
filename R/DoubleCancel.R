@@ -1,5 +1,5 @@
 ##main function
-omni.check<-function(N,n,n.iter,burn=1000,thin=4,CR,single) {#this checks both single and double cancellation
+omni.check_double<-function(N,n,n.iter,burn=1000,thin=4,CR) {#this checks ONLY the double cancellation bits
   n/N->dat
   chain<-list()
   #initialize
@@ -28,9 +28,54 @@ omni.check<-function(N,n,n.iter,burn=1000,thin=4,CR,single) {#this checks both s
   old.ll<-inits
   for (i in 1:nrow(old.ll)) for (j in 1:ncol(old.ll)) like(inits[i,j],N[i,j],n[i,j])->old.ll[i,j]
   dc.counter<-hands.bl<-hands.tr<-list()
-
   #iterate
-  chain<-CCIterate(n.iter, old, old.ll, single, burn, N, n)
+  for (I in 2:n.iter) {
+    for (i in 1:nrow(dat)) for (j in 1:ncol(dat)) {
+      #############################
+      #get left hand
+      lh1<-0#if (j==1) lh1<-0 else lh1<-old[i,j-1]
+      lh2<-0#if (i==1) lh2<-0 else lh2<-old[i-1,j]
+      #get right hand
+      rh1<-1#if (j==ncol(dat)) rh1<-1 else rh1<-old[i,j+1]
+      rh2<-1#if (i==nrow(dat)) rh2<-1 else rh2<-old[i+1,j]
+      #now make sure double cancellation needs to hold
+      lh3<-0
+      rh3<-1
+      test.1 <- as.logical(old[2,1] < old[1,2])
+      test.2 <- as.logical(old[3,2] < old[2,3])
+      if (test.1 & test.2) {
+        if (i==1 & j==3) {
+          lh3<-old[3,1]
+        }
+        if (i==3 & j==1) {
+          rh3<-old[1,3]
+        }
+      }
+      if (!test.1 & !test.2) {
+        if (i==3 & j==1) {
+          lh3<-old[1,3]
+        }
+        if (i==1 & j==3) {
+          rh3<-old[3,1]
+        }
+      }
+      #now work everything out all nice like...
+      lh<-max(lh1,lh2,lh3)
+      if (rh3>lh) rh<-min(rh1,rh2,rh3) else rh<-min(rh1,rh2)
+      if (rh<lh) rh<-1
+      #sample new point
+      runif(1,lh,rh)->draw
+      #acceptance ratio
+      ar<-2
+      like(draw,N[i,j],n[i,j])->new.ll
+      if (!(old[i,j] %in% 0:1)) exp(new.ll-old.ll[i,j])->ar
+      if (ar>runif(1)) {
+        draw->old[i,j]
+        new.ll->old.ll[i,j]
+      }
+    }
+    if (I>burn & I%%4==0) old->chain[[as.character(I)]]
+  }
   hi<-lo<-M<-chain[[1]]
   for (i in 1:3) for (j in 1:3) {
     post<-sapply(chain,function(x) x[i,j])
@@ -43,8 +88,7 @@ omni.check<-function(N,n,n.iter,burn=1000,thin=4,CR,single) {#this checks both s
 
 ############################################################
 #glorified wrapper
-ConjointChecks<-function(N,n,n.3mat=1,CR=c(.025,.975),single=FALSE,
-                         mc.cores=1) {
+DoubleCancel<-function(N,n,n.3mat=1,CR=c(.025,.975),mc.cores=1) {
   #N is the number of total tries per cell
   #n is the number correct
   #processing function
@@ -53,8 +97,7 @@ ConjointChecks<-function(N,n,n.3mat=1,CR=c(.025,.975),single=FALSE,
     arg.list[[2]]->n
     arg.list[[3]]->lof
     arg.list[[4]]->CR
-    arg.list[[5]]->single
-    lof[[1]]->omni.check
+    lof[[1]]->omni.check_double
     #lof[[2]]->chain.2.ci
     #lof[[3]]->compare
     test<-1
@@ -68,7 +111,7 @@ ConjointChecks<-function(N,n,n.3mat=1,CR=c(.025,.975),single=FALSE,
       nc/nt->dat
       sum (dat==1|dat==0)->test
     }
-    omni.check(nt,nc,n.iter=3000,CR=CR,single=single)->out
+    omni.check_double(nt,nc,n.iter=3000,CR=CR)->out
     #chain.2.ci(out)->out
     list(rows,cols,out)->save.dat
     save.dat
@@ -82,8 +125,7 @@ ConjointChecks<-function(N,n,n.3mat=1,CR=c(.025,.975),single=FALSE,
     arg.list[[2]]->n
     arg.list[[3]]->lof
     arg.list[[4]]->CR
-    arg.list[[5]]->single
-    lof[[1]]->omni.check
+    lof[[1]]->omni.check_double
     #lof[[2]]->chain.2.ci
     #lof[[3]]->compare
     N[rows,cols]->nt
@@ -91,7 +133,7 @@ ConjointChecks<-function(N,n,n.3mat=1,CR=c(.025,.975),single=FALSE,
     nc/nt->dat
     sum (dat==1|dat==0)->test
     if (test>0) NULL->save.dat else {
-      omni.check(nt,nc,n.iter=3000,CR=CR,single=single)->out
+      omni.check_double(nt,nc,n.iter=3000,CR=CR)->out
       #chain.2.ci(out)->out
       list(rows,cols,out)->save.dat
     }
@@ -102,8 +144,8 @@ ConjointChecks<-function(N,n,n.3mat=1,CR=c(.025,.975),single=FALSE,
   ifelse(abs(dat-.5)<=.5,TRUE,FALSE)->test
   if (!all(test)) stop("There is a problem with n/N, values not between 0 and 1 (inclusive)")
   #list(omni.check,chain.2.ci,compare)->lof
-  list(omni.check)->lof
-  list(N,n,lof,CR,single)->arg.list
+  list(omni.check_double)->lof
+  list(N,n,lof,CR)->arg.list
   dummy<-list()
   if (n.3mat=="adjacent") {
     nrow(N)->nr

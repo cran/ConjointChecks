@@ -1,5 +1,5 @@
 ##main function
-omni.check<-function(N,n,n.iter,burn=1000,thin=4,CR,single) {#this checks both single and double cancellation
+omni.check_single<-function(N,n,n.iter,burn=1000,thin=4,CR,single) {#this checks both single and double cancellation
   n/N->dat
   chain<-list()
   #initialize
@@ -28,9 +28,37 @@ omni.check<-function(N,n,n.iter,burn=1000,thin=4,CR,single) {#this checks both s
   old.ll<-inits
   for (i in 1:nrow(old.ll)) for (j in 1:ncol(old.ll)) like(inits[i,j],N[i,j],n[i,j])->old.ll[i,j]
   dc.counter<-hands.bl<-hands.tr<-list()
-
   #iterate
-  chain<-CCIterate(n.iter, old, old.ll, single, burn, N, n)
+  for (I in 2:n.iter) {
+    for (i in 1:nrow(dat)) for (j in 1:ncol(dat)) {
+      #############################
+      #get left hand
+      if (j==1) lh1<-0 else lh1<-old[i,j-1]
+      if (i==1) lh2<-0 else lh2<-old[i-1,j]
+      #get right hand
+      if (j==ncol(dat)) rh1<-1 else rh1<-old[i,j+1]
+      if (i==nrow(dat)) rh2<-1 else rh2<-old[i+1,j]
+      if (single=="R") {
+        lh<-lh1
+        rh<-rh1
+      }
+      if (single=="C") {
+        lh<-lh2
+        rh<-rh2
+      }        
+      #sample new point
+      runif(1,lh,rh)->draw
+      #acceptance ratio
+      ar<-2
+      like(draw,N[i,j],n[i,j])->new.ll
+      if (!(old[i,j] %in% 0:1)) exp(new.ll-old.ll[i,j])->ar
+      if (ar>runif(1)) {
+        draw->old[i,j]
+        new.ll->old.ll[i,j]
+      }
+    }
+    if (I>burn & I%%4==0) old->chain[[as.character(I)]]
+  }
   hi<-lo<-M<-chain[[1]]
   for (i in 1:3) for (j in 1:3) {
     post<-sapply(chain,function(x) x[i,j])
@@ -43,36 +71,35 @@ omni.check<-function(N,n,n.iter,burn=1000,thin=4,CR,single) {#this checks both s
 
 ############################################################
 #glorified wrapper
-ConjointChecks<-function(N,n,n.3mat=1,CR=c(.025,.975),single=FALSE,
-                         mc.cores=1) {
+SingleCancel<-function(N,n,CR=c(.025,.975),single,mc.cores=1) {
   #N is the number of total tries per cell
   #n is the number correct
   #processing function
-  proc.fun<-function(dummy,arg.list) {
-    arg.list[[1]]->N
-    arg.list[[2]]->n
-    arg.list[[3]]->lof
-    arg.list[[4]]->CR
-    arg.list[[5]]->single
-    lof[[1]]->omni.check
-    #lof[[2]]->chain.2.ci
-    #lof[[3]]->compare
-    test<-1
-    nrow(N)->nrows
-    ncol(N)->ncols
-    while (test>0) {
-      sort(sample(1:nrows,3,replace=FALSE))->rows
-      sort(sample(1:ncols,3,replace=FALSE))->cols
-      N[rows,cols]->nt
-      n[rows,cols]->nc
-      nc/nt->dat
-      sum (dat==1|dat==0)->test
-    }
-    omni.check(nt,nc,n.iter=3000,CR=CR,single=single)->out
-    #chain.2.ci(out)->out
-    list(rows,cols,out)->save.dat
-    save.dat
-  }
+  ## proc.fun<-function(dummy,arg.list) {
+  ##   arg.list[[1]]->N
+  ##   arg.list[[2]]->n
+  ##   arg.list[[3]]->lof
+  ##   arg.list[[4]]->CR
+  ##   arg.list[[5]]->single
+  ##   lof[[1]]->omni.check_single
+  ##   #lof[[2]]->chain.2.ci
+  ##   #lof[[3]]->compare
+  ##   test<-1
+  ##   nrow(N)->nrows
+  ##   ncol(N)->ncols
+  ##   while (test>0) {
+  ##     sort(sample(1:nrows,3,replace=FALSE))->rows
+  ##     sort(sample(1:ncols,3,replace=FALSE))->cols
+  ##     N[rows,cols]->nt
+  ##     n[rows,cols]->nc
+  ##     nc/nt->dat
+  ##     sum (dat==1|dat==0)->test
+  ##   }
+  ##   omni.check_single(nt,nc,n.iter=3000,CR=CR,single=single)->out
+  ##   #chain.2.ci(out)->out
+  ##   list(rows,cols,out)->save.dat
+  ##   save.dat
+  ## }
   proc.fun_adjacent<-function(dummy,arg.list) {
     dummy[1]->r1
     r1:(r1+2)->rows
@@ -83,7 +110,7 @@ ConjointChecks<-function(N,n,n.3mat=1,CR=c(.025,.975),single=FALSE,
     arg.list[[3]]->lof
     arg.list[[4]]->CR
     arg.list[[5]]->single
-    lof[[1]]->omni.check
+    lof[[1]]->omni.check_single
     #lof[[2]]->chain.2.ci
     #lof[[3]]->compare
     N[rows,cols]->nt
@@ -91,7 +118,7 @@ ConjointChecks<-function(N,n,n.3mat=1,CR=c(.025,.975),single=FALSE,
     nc/nt->dat
     sum (dat==1|dat==0)->test
     if (test>0) NULL->save.dat else {
-      omni.check(nt,nc,n.iter=3000,CR=CR,single=single)->out
+      omni.check_single(nt,nc,n.iter=3000,CR=CR,single=single)->out
       #chain.2.ci(out)->out
       list(rows,cols,out)->save.dat
     }
@@ -101,21 +128,21 @@ ConjointChecks<-function(N,n,n.3mat=1,CR=c(.025,.975),single=FALSE,
   n/N->dat
   ifelse(abs(dat-.5)<=.5,TRUE,FALSE)->test
   if (!all(test)) stop("There is a problem with n/N, values not between 0 and 1 (inclusive)")
-  #list(omni.check,chain.2.ci,compare)->lof
-  list(omni.check)->lof
+  #list(omni.check_single,chain.2.ci,compare)->lof
+  list(omni.check_single)->lof
   list(N,n,lof,CR,single)->arg.list
   dummy<-list()
-  if (n.3mat=="adjacent") {
-    nrow(N)->nr
-    ncol(N)->nc
-    for (i in 1:(nr-2)) for (j in 1:(nc-2)) c(i,j)->dummy[[paste(i,j)]]
-    parallel::mclapply(dummy,proc.fun_adjacent,arg.list=arg.list,mc.cores=mc.cores)->out
-    sapply(out,is.null)->destroy
-    out[!destroy]->out
-  } else {
-    for (i in 1:n.3mat) dummy[[i]]<-i
-    parallel::mclapply(dummy,proc.fun,arg.list=arg.list,mc.cores=mc.cores)->out
-  }
+  #if (n.3mat=="adjacent") {
+  nrow(N)->nr
+  ncol(N)->nc
+  for (i in 1:(nr-2)) for (j in 1:(nc-2)) c(i,j)->dummy[[paste(i,j)]]
+  parallel::mclapply(dummy,proc.fun_adjacent,arg.list=arg.list,mc.cores=mc.cores)->out
+  sapply(out,is.null)->destroy
+  out[!destroy]->out
+  ## } else {
+  ##   for (i in 1:n.3mat) dummy[[i]]<-i
+  ##   clusterApply(cl,dummy,proc.fun,arg.list=arg.list)->out
+  ## }
   list(N=N,n=n,Checks=out)->out
   #now do some summarizing
   compare<-function(dat,lim) {
@@ -146,5 +173,3 @@ ConjointChecks<-function(N,n,n.3mat=1,CR=c(.025,.975),single=FALSE,
   sum(tab*weight,na.rm=TRUE)/sum(weight)->m2
   new("checks", N=N,n=n,Checks=out,tab=tab,means=list(unweighted=m1,weighted=m2),check.counts=mat.den)
 }
-
-

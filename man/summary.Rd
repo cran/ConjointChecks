@@ -14,7 +14,8 @@ the percentage of reported violations at each cell.
   \item{\dots}{further arguments passed to or from other methods}
 
 }
+\value{No return value, called for side effects}
 \examples{
-summary(rasch5000)
+summary(rasch1000)
 }
 

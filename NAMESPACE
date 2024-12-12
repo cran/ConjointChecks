@@ -1,14 +1,12 @@
-import("methods")
+useDynLib(ConjointChecks)
 
-export(
-	"ConjointChecks",
-	"PrepareChecks"
-)
-
-exportClasses(
-	"checks"
-)
-
+export("ConjointChecks", "PrepareChecks", "plot.checks", "summary.checks")
+exportClasses("checks","list.null")
 S3method(plot,checks)
 S3method(summary,checks)
 
+import("methods")
+importFrom(Rcpp, evalCpp)
+importFrom("graphics", "mtext", "text")
+importFrom("stats", "pnorm", "quantile", "runif", "sd")
+importFrom("parallel", "mclapply")

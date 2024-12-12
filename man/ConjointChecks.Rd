@@ -8,18 +8,17 @@ check of single and double cancellation is performed in \code{n.3mat} matrices. 
 parallel options help.
 }
 \usage{
-ConjointChecks(N,n,n.3mat=1,par.options=NULL,CR=c(.025,.975),seed=NULL)
+ConjointChecks(N,n,n.3mat=1,CR=c(.025,.975),single=FALSE,mc.cores=1)
 }
 \arguments{
 \item{N}{Matrix containing the total number of responses.}
 \item{n}{Matrix containing the number of correct responses.}
 \item{n.3mat}{Number of 3-matrices to sample or the string "adjacent"
   if all adjacently formed 3-matrices are to be checked.}
-\item{par.options}{A named list indicating "n.workers" and "type". The
- first defaults to unity and the latter to \code{PSOCK}.}
-\item{seed}{Random number seed.}
 \item{CR}{Width of the credible region taken from the
 posterior. Defaults to a 95\% credible region (\code{c(.025,.975)}).}
+\item{single}{Also test single cancellation.}
+\item{mc.cores}{The number of cores to parallelize over.}
 }
 \references{
 Perline, R., Wright, B. D., & Wainer, H. (1979). The Rasch model as
@@ -61,7 +60,7 @@ ConjointChecks(N,n,n.3mat=1)->out
 
 ###########
 #simulated rasch example
-n.3mat<-5000
+n.3mat<-1000
 n.items<-20
 n.respondents<-2000
 #simulate data
@@ -75,9 +74,5 @@ runif(n.items*n.respondents)->test
 ifelse(pv>test,1,0)->resp
 ##now check
 PrepareChecks(resp)->tmp
-#not run
-#detectCores()->n.workers
-#ConjointChecks(tmp$N,tmp$n,n.3mat=5000,
-#  par.options=list(n.workers=n.workers,type="PSOCK"))->rasch5000
+\donttest{ConjointChecks(tmp$N,tmp$n,n.3mat=n.3mat,mc.cores=1)->rasch1000}
 }
-
